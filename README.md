@@ -1,4 +1,4 @@
-# Ground telemetry
+# Ground Telemetry Simulator
 
 A small ingest → store → query → chart slice. A simulator POSTs fake spacecraft measurements; Next.js writes them to local Postgres; the home page polls the last 15 minutes and draws a line chart.
 
@@ -20,19 +20,13 @@ brew services start postgresql@16
 createdb ground_telemetry
 ```
 
-**2. Create the table** (`psql ground_telemetry`):
+**2. Apply the schema** from the repo root (ordinary terminal, after `createdb`):
 
-```sql
-CREATE TABLE telemetry (
-  time timestamptz,
-  vehicle_id text,
-  metric text,
-  value double precision
-);
-
-CREATE INDEX telemetry_vehicle_metric_time
-  ON telemetry (vehicle_id, metric, time);
+```bash
+psql ground_telemetry -f schema.sql
 ```
+
+This creates the `telemetry` table and index. It is not run from inside the `psql` prompt. Safe to repeat (`IF NOT EXISTS`).
 
 **3. Env** — project root, `.env.local` (not committed):
 
@@ -61,11 +55,13 @@ Posts 3 metrics (`temp`, `bus_voltage`, `cabin_pressure`) at 1 Hz to `/api/inges
 
 ## API
 
-| Method | Path | Role |
-|---|---|---|
-| `GET` | `/api/health` | Ping Postgres. 200 `{ "ok": true }` or 503 if DB is down. |
-| `POST` | `/api/ingest` | Body `{ "points": [ { time, vehicle_id, metric, value } ] }`. 201 `{ "inserted": n }`. Bad batch → 400. |
-| `GET` | `/api/telemetry` | Query: `vehicle`, `metric`, `from`, `to` (ISO UTC). 200 `{ "points": [...] }` oldest first, cap 5000. Empty window is `[]`, not an error. `from` > `to` → 400. |
+
+| Method | Path             | Role                                                                                                                                                           |
+| ------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`    | Ping Postgres. 200 `{ "ok": true }` or 503 if DB is down.                                                                                                      |
+| `POST` | `/api/ingest`    | Body `{ "points": [ { time, vehicle_id, metric, value } ] }`. 201 `{ "inserted": n }`. Bad batch → 400.                                                        |
+| `GET`  | `/api/telemetry` | Query: `vehicle`, `metric`, `from`, `to` (ISO UTC). 200 `{ "points": [...] }` oldest first, cap 5000. Empty window is `[]`, not an error. `from` > `to` → 400. |
+
 
 Metrics: `temp` \| `bus_voltage` \| `cabin_pressure`. Vehicle in the simulator: `sat-1`.
 
@@ -73,3 +69,4 @@ Metrics: `temp` \| `bus_voltage` \| `cabin_pressure`. Vehicle in the simulator: 
 
 - Simulator off → chart goes stale / empty; health still 200.
 - Postgres off → health and ingest fail (503); page shows an error.
+
