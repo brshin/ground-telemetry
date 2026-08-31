@@ -63,10 +63,10 @@ export default function Home() {
           <option value="bus_voltage">Bus Voltage</option>
           <option value="cabin_pressure">Cabin Pressure</option>
         </select>
-        {error && <p>Error fetching data</p>}
-        {!error && points.length === 0 && <p>No data</p>}
+        {error && <p className="status-error">Error fetching data</p>}
+        {!error && points.length === 0 && <p className="status">No data</p>}
         {!error && points.length > 0 && (
-        <div style={{ width: "100%", height: 320 }}>
+        <div className="chart">
           <ResponsiveContainer>
             <LineChart data={points}>
               <CartesianGrid />
