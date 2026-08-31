@@ -34,7 +34,7 @@ export default function Home() {
           setError(true);
           return;
         }
-        
+
         const data = await res.json();
         setError(false);
 
@@ -65,11 +65,6 @@ export default function Home() {
         </select>
         {error && <p>Error fetching data</p>}
         {!error && points.length === 0 && <p>No data</p>}
-        {points.map((point) => (
-          <p>
-            {point.time} - {point.value}
-          </p>
-        ))}
         {!error && points.length > 0 && (
         <div style={{ width: "100%", height: 320 }}>
           <ResponsiveContainer>
