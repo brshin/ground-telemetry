@@ -1,34 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ground telemetry
 
-## Getting Started
+A small ingest → store → query → chart slice. A simulator POSTs fake spacecraft measurements; Next.js writes them to local Postgres; the home page polls the last 15 minutes and draws a line chart.
 
-First, run the development server:
+No websockets, auth, or Docker. Postgres runs on this machine (`localhost`), not a hosted DB.
+
+## Stack
+
+- Next.js (App Router, TypeScript)
+- PostgreSQL 16 on localhost
+- Node simulator (`scripts/simulate.ts`)
+
+## Setup
+
+**1. Install and start Postgres** (Homebrew on macOS):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+brew install postgresql@16
+brew services start postgresql@16
+createdb ground_telemetry
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**2. Create the table** (`psql ground_telemetry`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sql
+CREATE TABLE telemetry (
+  time timestamptz,
+  vehicle_id text,
+  metric text,
+  value double precision
+);
 
-## Learn More
+CREATE INDEX telemetry_vehicle_metric_time
+  ON telemetry (vehicle_id, metric, time);
+```
 
-To learn more about Next.js, take a look at the following resources:
+**3. Env** — project root, `.env.local` (not committed):
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+DATABASE_URL=postgresql://YOUR_MAC_USER@localhost:5432/ground_telemetry
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Homebrew Postgres usually has no password. Restart `npm run dev` after creating this file.
 
-## Deploy on Vercel
+**4. App**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm install
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open [http://localhost:3000](http://localhost:3000).
+
+**5. Simulator** (second terminal; app must already be running):
+
+```bash
+npx tsx scripts/simulate.ts
+```
+
+Posts 3 metrics (`temp`, `bus_voltage`, `cabin_pressure`) at 1 Hz to `/api/ingest`. Ctrl+C to stop.
+
+## API
+
+| Method | Path | Role |
+|---|---|---|
+| `GET` | `/api/health` | Ping Postgres. 200 `{ "ok": true }` or 503 if DB is down. |
+| `POST` | `/api/ingest` | Body `{ "points": [ { time, vehicle_id, metric, value } ] }`. 201 `{ "inserted": n }`. Bad batch → 400. |
+| `GET` | `/api/telemetry` | Query: `vehicle`, `metric`, `from`, `to` (ISO UTC). 200 `{ "points": [...] }` oldest first, cap 5000. Empty window is `[]`, not an error. `from` > `to` → 400. |
+
+Metrics: `temp` \| `bus_voltage` \| `cabin_pressure`. Vehicle in the simulator: `sat-1`.
+
+## Failure modes
+
+- Simulator off → chart goes stale / empty; health still 200.
+- Postgres off → health and ingest fail (503); page shows an error.
