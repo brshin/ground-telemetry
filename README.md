@@ -2,13 +2,14 @@
 
 A small ingest → store → query → chart slice. A simulator POSTs fake spacecraft measurements; Next.js writes them to local Postgres; the home page polls the last 15 minutes and draws a line chart.
 
-No websockets, auth, or Docker. Postgres runs on this machine (`localhost`), not a hosted DB.
+No websockets or auth. Postgres is local (Homebrew on `localhost`, or Docker Compose). Not a hosted DB.
 
 ## Stack
 
 - Next.js (App Router, TypeScript)
-- PostgreSQL 16 on localhost
-- Node simulator (`scripts/simulate.ts`)
+- PostgreSQL 16 (Homebrew **or** Compose service `db`)
+- Node simulator (`scripts/simulate.ts`) — always on the host, not inside Compose
+- Optional: Docker Compose (`Dockerfile` + `docker-compose.yml`)
 
 ## Setup
 
@@ -52,6 +53,30 @@ npx tsx scripts/simulate.ts
 ```
 
 Posts 3 metrics (`temp`, `bus_voltage`, `cabin_pressure`) at 1 Hz to `/api/ingest`. Ctrl+C to stop.
+
+## Run with Docker (optional)
+
+Same source tree. Compose starts two containers (`db` + `app`) and a private network. The app uses hostname `db`, not `localhost`. Browser and simulator still use **http://localhost:3000**.
+
+Homebrew Postgres and Compose both want port **5432**. Stop Homebrew first. Stop `npm run dev` so port **3000** is free.
+
+```bash
+brew services stop postgresql@16
+docker compose up --build
+```
+
+Open [http://localhost:3000](http://localhost:3000). In a second terminal, run the simulator as in step 5 (`npx tsx scripts/simulate.ts`). Compose does not start it.
+
+`schema.sql` runs **once**, when the `pgdata` volume is first created. That database is **not** the Homebrew one.
+
+After app code changes, rebuild: `docker compose up --build`. The Postgres image does not need rebuilding. For day-to-day UI work, `npm run dev` + Homebrew is still faster.
+
+```bash
+docker compose down
+brew services start postgresql@16
+```
+
+`down` stops containers; data in `pgdata` remains unless you add `-v`.
 
 ## API
 
